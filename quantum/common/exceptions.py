@@ -60,6 +60,10 @@ class PortNotFound(NotFound):
                 "on network %(net_id)s")
 
 
+class PolicyNotFound(NotFound):
+    message = _("Policy configuration policy.json could not be found")
+
+
 class StateInvalid(QuantumException):
     message = _("Unsupported port state: %(port_state)s")
 
@@ -112,3 +116,7 @@ class InvalidContentType(Invalid):
 
 class NotImplementedError(Error):
     pass
+
+
+class PolicyNotAuthorized(QuantumException):
+    message = _("Policy doesn't allow %(action)s to be performed.")
