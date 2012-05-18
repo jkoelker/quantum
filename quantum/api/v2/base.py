@@ -130,13 +130,14 @@ class Controller(api_common.QuantumController):
         filter_opts.update(request.GET)
 
         obj_getter = getattr(self._plugin, "get_all_%s" % self._collection)
-        obj_list = obj_getter(filter_opts=filter_opts)
+        obj_list = obj_getter(filter_opts=filter_opts,
+                              context=request.context)
 
         return dict(ports=[self._view(obj) for obj in obj_list])
 
     def _item(self, request, id):
         obj_getter = getattr(self._plugin, "get_%s_details" % self._resource)
-        obj = obj_getter(id)
+        obj = obj_getter(id, context=request.context)
         return {self._resource: self._view(obj)}
 
     def index(self, req):
@@ -148,15 +149,15 @@ class Controller(api_common.QuantumController):
     def create(self, req, body):
         body = self._prepare_request_body(body)
         obj_creator = getattr(self._plugin, "create_%s" % self._resource)
-        obj = obj_creator(body)
+        obj = obj_creator(body, context=req.context)
         return {self._resource: self._view(obj)}
 
     def delete(self, req, id):
         obj_deleter = getattr(self._plugin, "delete_%s" % self._resource)
-        obj_deleter(id)
+        obj_deleter(id, context=req.context)
 
     def update(self, req, id, body):
         body = self._prepare_request_body(body)
         obj_updater = getattr(self._plugin, "update_%s" % self._resource)
-        obj = obj_updater(body)
+        obj = obj_updater(body, context=req.context)
         return {self._resource: self._view(obj)}
