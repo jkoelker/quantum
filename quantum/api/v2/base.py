@@ -13,16 +13,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import functools
 import logging
 import json
 
-from quantum.api import api_common
+import webob.dec
+import webob.exc
+
+from quantum.common import exceptions
 from quantum.api import faults
 from quantum.common import utils
 from quantum.api.v2 import views
-from quantum import wsgi
+from quantum import wsgi2
 
 LOG = logging.getLogger(__name__)
+XML_NS_V20 = 'http://openstack.org/quantum/api/v2.0'
+
+FAULT_MAP = {exceptions.NetworkNotFound: webob.exc.HTTPNotFound,
+             exceptions.NetworkInUse: webob.exc.HTTPConflict,
+             exceptions.PortNotFound: webob.exc.HTTPNotFound,
+             exceptions.StateInvalid: webob.exc.HTTPBadRequest,
+             exceptions.PortInUse: webob.exc.HTTPConflict}
+
+
+def show(request):
+    """
+    Extracts the list of fields to return
+    """
+    return [v for v in request.GET.getall('show') if v]
 
 
 def filters(request):
@@ -41,6 +59,7 @@ def filters(request):
                  for k in set(request.GET)
                  if k not in ('verbose', 'show') and
                     (v for v in request.GET.getall(k) if v)))
+
 
 def verbose(request):
     """
@@ -91,32 +110,62 @@ def create_resource(collection, resource, plugin, conf):
     #xml_serializer = wsgi.XMLDictSerializer(metadata, xmlns)
     #xml_deserializer = wsgi.XMLDeserializer(metadata)
 
-    body_serializers = {
+    serializers = {
     #    'application/xml': xml_serializer,
-        'application/json': lambda x: json.dumps(x)
     }
 
-    body_deserializers = {
+    deserializers = {
     #    'application/xml': xml_deserializer,
-        'application/json': lambda x: json.loads(x)
     }
 
-    serializer = wsgi.ResponseSerializer(body_serializers,
-                                         api_common.HeaderSerializer11())
-    deserializer = wsgi.RequestDeserializer(body_deserializers)
+    serializer = wsgi2.ResponseSerializer(serializers)
+    deserializer = wsgi2.RequestDeserializer(deserializers)
 
     # TODO(cerberus): fix the faults crap later
-    return wsgi.Resource(controller,
-                         faults.fault_body_function_v11,
-                         deserializer,
-                         serializer)
+    return wsgi2.Resource(controller,
+                          faults.fault_body_function_v11,
+                          deserializer,
+                          serializer)
+
+
+def _fault_wrapper(func):
+    """
+    Wraps calls to the plugin to translate Exceptions to webob Faults
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except exceptions.QuantumException as e:
+            e_type = type(e)
+            if e_type in FAULT_MAP:
+                fault = FAULT_MAP[e_type]
+                fault_data = json.dumps({'QuantumError': {
+                                            'type': e.__class__.__name__,
+                                            'message': e.message,
+                                            'detail': '${detail}',
+                                            }})
+                raise fault(body_template=fault_data)
+            raise e
+    return wrapper
+
+
+class FaultWrapper(object):
+    """
+    Wrapper class to wrap all plugin functions with the fault_wrapper
+    """
+    def __init__(self, plugin):
+        self._plugin = plugin
+
+    def __getattribute__(self, name):
+        plugin = object.__getattribute__(self, '_plugin')
+        return _fault_wrapper(object.__getattribute__(plugin, name))
 
 
 # TODO(anyone): super generic first cut
-class Controller(api_common.QuantumController):
+class Controller(object):
     def __init__(self, plugin, collection, resource):
-        super(Controller, self).__init__(plugin)
-        self._plugin = plugin
+        self._plugin = FaultWrapper(plugin)
         self._collection = collection
         self._resource = resource
         self._view = getattr(views, self._resource)

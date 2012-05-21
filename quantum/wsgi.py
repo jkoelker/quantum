@@ -241,6 +241,12 @@ class XMLDictSerializer(DictSerializer):
 
         return self.to_xml_string(node)
 
+    def __call__(self, data):
+        # Provides a migration path to a cleaner WSGI layer, this
+        # "default" stuff and extreme extensibility isn't being used
+        # like originally intended
+        return self.default(data)
+
     def to_xml_string(self, node, has_atom=False):
         self._add_xmlns(node, has_atom)
         return node.toxml('UTF-8')
@@ -463,6 +469,10 @@ class XMLDeserializer(TextDeserializer):
 
     def default(self, datastring):
         return {'body': self._from_xml(datastring)}
+
+    def __call__(self, datastring):
+        # Adding a migration path to allow us to remove unncessary classes
+        return self.default(datastring)
 
 
 class RequestHeadersDeserializer(ActionDispatcher):

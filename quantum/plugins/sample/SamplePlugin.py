@@ -78,6 +78,7 @@ class QuantumEchoPlugin(object):
         the specified tenant.
         """
         print("get_all_networks() called\n")
+        raise exc.NetworkNotFound(net_id="hozer")
 
     def create_network(self, context, tenant_id, net_name, **kwargs):
         """
