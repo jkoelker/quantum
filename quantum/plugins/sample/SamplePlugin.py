@@ -71,7 +71,7 @@ class QuantumEchoPlugin(object):
     the name of the method that was called.
     """
 
-    def get_all_networks(self, context, tenant_id):
+    def get_all_networks(self, context, tenant_id=None, **kwargs):
         """
         Returns a dictionary containing all
         <network_uuid, network_name> for
@@ -347,7 +347,7 @@ class FakePlugin(object):
         is deleted.
         """
         LOG.debug("FakePlugin.delete_port() called")
-        net = self._get_network(context, tenant_id, net_id)
+        self._get_network(context, tenant_id, net_id)
         port = self._get_port(context, tenant_id, net_id, port_id)
         if port['interface_id']:
             raise exc.PortInUse(net_id=net_id, port_id=port_id,
