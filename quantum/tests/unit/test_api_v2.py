@@ -298,6 +298,8 @@ class TestSubnetsV2(APIv2TestCase):
                                   network['network']['id'])
 
     def test_list_subnets(self):
+        # NOTE(jkoelker) This would be a good place to use contextlib.nested
+        #                or just drop 2.6 support ;)
         with self.network() as network:
             with self.subnet(network=network, gateway='10.0.0.1',
                              prefix='10.0.1.0/24') as subnet:
