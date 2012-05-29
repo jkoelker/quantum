@@ -36,6 +36,10 @@ class APIv2TestCase(unittest.TestCase):
 
     def tearDown(self):
         super(APIv2TestCase, self).tearDown()
+        # NOTE(jkoelker) for a 'pluggable' framework, Quantum sure
+        #                doesn't like when the plugin changes ;)
+        db._ENGINE = None
+        db._MAKER = None
 
     def _req(self, method, resource, data=None, fmt='json', id=None):
         if id:
