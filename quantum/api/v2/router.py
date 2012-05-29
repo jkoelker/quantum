@@ -39,9 +39,10 @@ REQUIREMENTS = {'id': UUID_PATTERN, 'format': 'xml|json'}
 # TODO(anyone): these basically have no purpose at the moment
 RESOURCE_PARAM_MAP = {
     "networks": [
+        {"attr": "name"},
     ],
     "ports": [
-        {"attr": "state", "default": "DOWN"}
+        {"attr": "state", "default": "DOWN"},
     ],
     "subnets": [
     ]
