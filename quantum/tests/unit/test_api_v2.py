@@ -76,28 +76,52 @@ class APIv2TestCase(unittest.TestCase):
         return data
 
     def _create_network(self, fmt, name, admin_status_up):
-        LOG.debug('Creating network')
         data = {'network': {'name': name,
                             'admin_state_up': admin_status_up}}
         network_req = self.new_create_request('networks', data, fmt)
-        network_res = network_req.get_response(self.api)
-        return network_res
+        return network_req.get_response(self.api)
+
+    def _create_subnet(self, fmt, net_id, gateway_ip, prefix):
+        data = {'subnet': {'network_id': net_id,
+                           'allocations': [],
+                           'prefix': prefix,
+                           'ip_version': 4,
+                           'gateway_ip': gateway_ip}}
+        subnet_req = self.new_create_request('subnets', data, fmt)
+        return subnet_req.get_response(self.api)
+
+    def _make_subnet(self, fmt, network, gateway, prefix):
+        res = self._create_subnet(fmt, network['network']['id'],
+                                  gateway, prefix)
+        return self.deserialize(fmt, res)
+
+    def _delete(self, collection, id):
+        req = self.new_delete_request(collection, id)
+        req.get_response(self.api)
 
     @contextlib.contextmanager
     def network(self, name='net1', admin_status_up=True, fmt='json'):
         res = self._create_network(fmt, name, admin_status_up)
         network = self.deserialize(fmt, res)
         yield network
-        req = self.new_delete_request('networks', network['network']['id'])
-        req.get_response(self.api)
+        self._delete('networks', network['network']['id'])
+
+    @contextlib.contextmanager
+    def subnet(self, network=None, gateway='10.0.0.1',
+               prefix='10.0.0.0/24', fmt='json'):
+        # TODO(anyone) DRY this
+        if not network:
+            with self.network() as network:
+                subnet = self._make_subnet(fmt, network, gateway, prefix)
+                yield subnet
+                self._delete('subnets', subnet['subnet']['id'])
+        else:
+            subnet = self._make_subnet(fmt, network, gateway, prefix)
+            yield subnet
+            self._delete('subnets', subnet['subnet']['id'])
 
 
 class TestV2HTTPResponse(APIv2TestCase):
-    def setUp(self):
-        super(TestV2HTTPResponse, self).setUp()
-        res = self._create_network('json', 'net1', True)
-        self.net = self.deserialize('json', res)
-
     def test_create_returns_201(self):
         res = self._create_network('json', 'net2', True)
         self.assertEquals(res.status_int, 201)
@@ -108,21 +132,25 @@ class TestV2HTTPResponse(APIv2TestCase):
         self.assertEquals(res.status_int, 200)
 
     def test_show_returns_200(self):
-        req = self.new_show_request('networks', self.net['network']['id'])
-        res = req.get_response(self.api)
-        self.assertEquals(res.status_int, 200)
+        with self.network() as net:
+            req = self.new_show_request('networks', net['network']['id'])
+            res = req.get_response(self.api)
+            self.assertEquals(res.status_int, 200)
 
     def test_delete_returns_204(self):
-        req = self.new_delete_request('networks', self.net['network']['id'])
+        res = self._create_network('json', 'net1', True)
+        net = self.deserialize('json', res)
+        req = self.new_delete_request('networks', net['network']['id'])
         res = req.get_response(self.api)
         self.assertEquals(res.status_int, 204)
 
     def test_update_returns_202(self):
-        req = self.new_update_request('networks',
-                                      {'network': {'name': 'steve'}},
-                                      self.net['network']['id'])
-        res = req.get_response(self.api)
-        self.assertEquals(res.status_int, 202)
+        with self.network() as net:
+            req = self.new_update_request('networks',
+                                          {'network': {'name': 'steve'}},
+                                          net['network']['id'])
+            res = req.get_response(self.api)
+            self.assertEquals(res.status_int, 202)
 
     def test_bad_route_404(self):
         req = self.new_list_request('doohickeys')
@@ -240,57 +268,47 @@ class TestNetworksV2(APIv2TestCase):
 
 
 class TestSubnetsV2(APIv2TestCase):
-    def setUp(self):
-        super(TestSubnetsV2, self).setUp()
-        res = self._create_network('json', 'net1', True)
-        self.net = self.deserialize('json', res)
-        res = self._create_subnet('json', self.net['network']['id'],
-                                  '10.0.0.1', '10.0.0.0/24')
-        self.subnet = self.deserialize('json', res)
-
-    def tearDown(self):
-        req = self.new_delete_request('networks', self.net['network']['id'])
-        req.get_response(self.api)
-
-    def _create_subnet(self, fmt, net_id, gateway_ip, prefix):
-        #content_type = 'application/' + fmt
-        data = {'subnet': {'network_id': net_id,
-                           'allocations': [],
-                           'prefix': prefix,
-                           'ip_version': 4,
-                           'gateway_ip': gateway_ip}}
-        subnet_req = self.new_create_request('subnets', data, fmt)
-        return subnet_req.get_response(self.api)
-
     def test_create_subnet(self):
-        keys = [('ip_version', 4), ('gateway_ip', '10.0.0.1'),
-                ('prefix', '10.0.0.0/24')]
-        for k, v in keys:
-            self.assertEquals(self.subnet['subnet'][k], v)
+        gateway = '10.0.0.1'
+        prefix = '10.0.0.0/24'
+        keys = [('ip_version', 4), ('gateway_ip', gateway),
+                ('prefix', prefix)]
+        with self.subnet(gateway=gateway, prefix=prefix) as subnet:
+            for k, v in keys:
+                self.assertEquals(subnet['subnet'][k], v)
 
     def test_update_subnet(self):
-        req = self.new_update_request('subnets',
-                                      {'subnet': {'prefix': '192.168.0.0/24'}},
-                                      self.subnet['subnet']['id'])
-        res = req.get_response(self.api)
-        subnet = self.deserialize('json', res)
-        self.assertEqual(subnet['subnet']['prefix'], '192.168.0.0/24')
+        with self.subnet() as subnet:
+            data = {'subnet': {'prefix': '192.168.0.0/24'}}
+            req = self.new_update_request('subnets', data,
+                                          subnet['subnet']['id'])
+            res = self.deserialize('json', req.get_response(self.api))
+            self.assertEqual(res['subnet']['prefix'],
+                             data['subnet']['prefix'])
 
     def test_show_subnet(self):
-        req = self.new_show_request('subnets', self.subnet['subnet']['id'])
-        res = req.get_response(self.api)
-        net = self.deserialize('json', res)
-        self.assertEquals(net['subnet']['network_id'],
-                          self.net['network']['id'])
+        with self.network() as network:
+            with self.subnet(network=network) as subnet:
+                req = self.new_show_request('subnets',
+                                            subnet['subnet']['id'])
+                res = self.deserialize('json', req.get_response(self.api))
+                self.assertEquals(res['subnet']['id'],
+                                  subnet['subnet']['id'])
+                self.assertEquals(res['subnet']['network_id'],
+                                  network['network']['id'])
 
     def test_list_subnets(self):
-        res = self._create_subnet('json', self.net['network']['id'],
-                                      '10.0.1.1', '10.0.1.0/24')
-        subnet2 = self.deserialize('json', res)
-
-        req = self.new_list_request('subnets')
-        res = req.get_response(self.api)
-        net = self.deserialize('json', res)
-        self.assertEquals(net['subnets'][0]['subnet']['prefix'], '10.0.0.0/24')
-        self.assertEquals(net['subnets'][1]['subnet']['prefix'], '10.0.1.0/24')
-        self.new_delete_request('subnets', subnet2['subnet']['id'])
+        with self.network() as network:
+            with self.subnet(network=network, gateway='10.0.0.1',
+                             prefix='10.0.1.0/24') as subnet:
+                with self.subnet(network=network, gateway='10.0.1.1',
+                                 prefix='10.0.1.0/24') as subnet2:
+                    req = self.new_list_request('subnets')
+                    res = self.deserialize('json',
+                                           req.get_response(self.api))
+                    res1 = res['subnets'][0]
+                    res2 = res['subnets'][1]
+                    self.assertEquals(res1['subnet']['prefix'],
+                                      subnet['subnet']['prefix'])
+                    self.assertEquals(res2['subnet']['prefix'],
+                                      subnet2['subnet']['prefix'])
