@@ -186,13 +186,26 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
     def _get_subnet(self, context, id, verbose=None):
         try:
             subnet = self._get_by_id(context, models_v2.Subnet, id,
-                                     joins=('subnets',), verbose=verbose)
+                                     verbose=verbose)
         except exc.NoResultFound:
             raise q_exc.SubnetNotFound(subnet_id=id)
         except exc.MultipleResultsFound:
             LOG.error('Multiple subnets match for %s' % id)
             raise q_exc.SubnetNotFound(subnet_id=id)
         return subnet
+
+    def _get_port(self, context, id, verbose=None):
+        try:
+            port = self._get_by_id(context, models_v2.Subnet, id,
+                                   verbose=verbose)
+        except exc.NoResultFound:
+            # NOTE(jkoelker) The PortNotFound exceptions requires net_id
+            #                kwarg in order to set the message correctly
+            raise q_exc.PortNotFound(port_id=id, net_id=None)
+        except exc.MultipleResultsFound:
+            LOG.error('Multiple ports match for %s' % id)
+            raise q_exc.PortNotFound(port_id=id)
+        return port
 
     def _show(self, resource, show):
         if show:
@@ -226,6 +239,16 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
                'ip_version': subnet['ip_version'],
                'prefix': subnet['prefix'],
                'gateway_ip': subnet['gateway_ip']}
+        return self._show(res, show)
+
+    def _make_port_dict(self, port, show=None):
+        res = {"id": port["uuid"],
+               "network_id": port["network_uuid"],
+               "mac_address": port["mac_address"],
+               "admin_state_up": port["admin_state_up"],
+               "op_status": port["op_status"],
+               "fixed_ips": [ip["address"] for ip in port["fixed_ips"]],
+               "device_id": port["device_uuid"]}
         return self._show(res, show)
 
     def create_network(self, context, network):
@@ -313,85 +336,89 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
                                     filters=filters, show=show,
                                     verbose=verbose)
 
-    def _make_port_dict(self, port):
-        ips = [{"address": f.address,
-                "subnet_id": f.subnet_uuid}
-                    for f in port.fixed_ips]
-        return {"id": port.uuid,
-                "network_id": port.network_uuid,
-                "mac_address": port.mac_address,
-                "admin_state_up": port.admin_state_up,
-                "op_status": port.op_status,
-                "fixed_ips": ips,
-                "device_id": port.device_uuid}
-
     def create_port(self, context, port):
         p = port['port']
-        session = db.get_session()
+        # NOTE(jkoelker) Get the tenant_id outside of the session to avoid
+        #                unneeded db action if the operation raises
+        tenant_id = self._get_tenant_id_for_create(context, p)
+
         #FIXME(danwent): allocate MAC
         mac_address = "ca:fe:de:ad:be:ef"
-        with session.begin():
-            port = models_v2.Port(network_uuid=p['network_id'],
+        with context.session.begin():
+            network = self._get_network(context, p["network_id"])
+
+            port = models_v2.Port(tenant_id=tenant_id,
+                                  network_uuid=p['network_id'],
                                   mac_address=mac_address,
                                   admin_state_up=p['admin_state_up'],
                                   op_status="ACTIVE",
                                   device_uuid=p['device_id'])
+            context.session.add(port)
 
-            network_uuid = p['network_id']
-            network = session.query(models_v2.Network).\
-                                    filter_by(uuid=network_uuid).\
-                                    first()
+            # TODO ip allocation
+            for subnet in network["subnets"]:
+                pass
 
-            ip_found = {4: False, 6: False}
-            for subnet in network.subnets:
-                if not ip_found[subnet.ip_version]:
-                    ip_alloc = session.query(models_v2.IP_Allocation).\
-                                     filter_by(allocated=False).\
-                                     filter_by(subnet_uuid=subnet.uuid).\
-                                     with_lockmode('update').\
-                                     first()
-                    if not ip_alloc:
-                        continue
-
-                    ip_alloc['allocated'] = True
-                    ip_alloc['port_uuid'] = port.uuid
-                    session.add(ip_alloc)
-                    ip_found[subnet.ip_version] = True
-
-            if not ip_found[4] and not ip_found[6]:
-                raise q_exc.FixedIPNotAvailable(network_uuid=network_uuid)
-            session.add(port)
-            session.flush()
         return self._make_port_dict(port)
 
+#        p = port['port']
+#        session = db.get_session()
+#        with session.begin():
+#            port = models_v2.Port(network_uuid=p['network_id'],
+#                                  mac_address=mac_address,
+#                                  admin_state_up=p['admin_state_up'],
+#                                  op_status="ACTIVE",
+#                                  device_uuid=p['device_id'])
+#
+#            network_uuid = p['network_id']
+#            network = session.query(models_v2.Network).\
+#                                    filter_by(uuid=network_uuid).\
+#                                    first()
+#
+#            ip_found = {4: False, 6: False}
+#            for subnet in network.subnets:
+#                if not ip_found[subnet.ip_version]:
+#                    ip_alloc = session.query(models_v2.IP_Allocation).\
+#                                     filter_by(allocated=False).\
+#                                     filter_by(subnet_uuid=subnet.uuid).\
+#                                     with_lockmode('update').\
+#                                     first()
+#                    if not ip_alloc:
+#                        continue
+#
+#                    ip_alloc['allocated'] = True
+#                    ip_alloc['port_uuid'] = port.uuid
+#                    session.add(ip_alloc)
+#                    ip_found[subnet.ip_version] = True
+#
+#            if not ip_found[4] and not ip_found[6]:
+#                raise q_exc.FixedIPNotAvailable(network_uuid=network_uuid)
+#            session.add(port)
+#            session.flush()
+#        return self._make_port_dict(port)
+
     def update_port(self, context, id, port):
-        pass
+        p = port['port']
+        with context.session.begin():
+            port = self._get_port(context, id)
+            port.update(p)
+        return self._make_port_dict(port)
 
     def delete_port(self, context, id):
-        session = db.get_session()
-        try:
-            port = (session.query(models_v2.Port).
-                   filter_by(uuid=id).
-                   one())
+        with context.session.begin():
+            port = self._get_port(context, id)
 
-            session.delete(port)
-            session.flush()
-        except exc.NoResultFound:
-            raise q_exc.PortNotFound(port_id=id)
+            allocations_qry = context.session.query(models_v2.IPAllocation)
+            allocations_qry.filter_by(port_uuid=id).delete()
+
+            context.session.delete(port)
 
     def get_port(self, context, id, show=None, verbose=None):
-        session = db.get_session()
-        try:
-            #TODO(danwent): filter by tenant
-            port = (session.query(models_v2.Port).
-                      filter_by(uuid=id).
-                      one())
-            return self._make_port_dict(port)
-        except exc.NoResultFound:
-            raise q_exc.PortNotFound(port_uuid=id)
+        port = self._get_port(context, id, verbose=verbose)
+        return self._make_port_dict(port, show)
 
     def get_ports(self, context, filters=None, show=None, verbose=None):
-        session = db.get_session()
-        #TODO(danwent): filter by tenant
-        all_ports = (session.query(models_v2.Port).all())
-        return [self._make_port_dict(p) for p in all_ports]
+        return self._get_collection(context, models_v2.Port,
+                                    self._make_subnet_dict,
+                                    filters=filters, show=show,
+                                    verbose=verbose)
