@@ -5,18 +5,18 @@ import unittest
 #import netaddr
 
 from quantum.api.v2.router import APIRouter
-#from quantum.manager import QuantumManager
 from quantum.tests.unit.testlib_api import create_request
 #from quantum.wsgi import Serializer, XMLDeserializer, JSONDeserializer
 from quantum.wsgi import Serializer, JSONDeserializer
 
 
-LOG = logging.getLogger("quantum.tests.api_v2_test")
+LOG = logging.getLogger(__name__)
 
 
 class APIv2TestCase(unittest.TestCase):
     def setUp(self):
         super(APIv2TestCase, self).setUp()
+
         self._tenant_id = "test-tenant"
 
         json_deserializer = JSONDeserializer()
@@ -26,6 +26,9 @@ class APIv2TestCase(unittest.TestCase):
 
         plugin = "quantum.plugins.sample.SamplePluginV2.FakePlugin"
         self.api = APIRouter({"plugin_provider": plugin})
+
+    def tearDown(self):
+        super(APIv2TestCase, self).tearDown()
 
     def _req(self, method, resource, data=None, fmt="json", id=None):
         if id:
@@ -75,9 +78,6 @@ class TestV2HTTPResponse(APIv2TestCase):
         super(TestV2HTTPResponse, self).setUp()
         res = self._create_network("json", "net1", True)
         self.net = self.deserialize("json", res)
-
-    def tearDown(self):
-        super(TestV2HTTPResponse, self).tearDown()
 
     def test_create_returns_201(self):
         res = self._create_network("json", "net2", True)
@@ -191,7 +191,8 @@ class TestNetworksV2(APIv2TestCase):
         self.net = self.deserialize("json", res)
 
     def tearDown(self):
-        super(TestNetworksV2, self).setUp()
+        super(TestNetworksV2, self).tearDown()
+        self.net = None
         req = self.new_delete_request("networks", self.net["network"]["id"])
         req.get_response(self.api)
 
