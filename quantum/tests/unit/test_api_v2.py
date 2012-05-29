@@ -237,8 +237,6 @@ class TestSubnetsV2(APIv2TestCase):
     def tearDown(self):
         req = self.new_delete_request("networks", self.net["network"]["id"])
         req.get_response(self.api)
-        req = self.new_delete_request("subnets", self.subnet["subnet"]["id"])
-        req.get_response(self.api)
 
     def _create_subnet(self, fmt, net_id, gateway_ip, prefix):
         #content_type = "application/" + fmt
