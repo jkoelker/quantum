@@ -31,7 +31,7 @@ class APIv2TestCase(unittest.TestCase):
             'application/json': json_deserializer,
         }
 
-        plugin = 'quantum.plugins.sample.SamplePluginV2.FakePlugin'
+        plugin = 'quantum.db.db_base_plugin_v2.QuantumDbPluginV2'
         self.api = APIRouter({'plugin_provider': plugin})
 
     def tearDown(self):
