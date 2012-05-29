@@ -86,7 +86,8 @@ class APIRouter(wsgi.Router):
 
     def __init__(self, conf, **local_config):
         mapper = routes_mapper.Mapper()
-        plugin = manager.QuantumManager.get_plugin(conf)
+        plugin_provider = manager.get_plugin_provider(conf)
+        plugin = manager.get_plugin(plugin_provider)
 
         col_kwargs = dict(collection_actions=COLLECTION_ACTIONS,
                           member_actions=MEMBER_ACTIONS)
@@ -102,7 +103,6 @@ class APIRouter(wsgi.Router):
             mapper_kwargs = dict(controller=controller,
                                  requirements=REQUIREMENTS,
                                  **col_kwargs)
-            LOG.debug(mapper_kwargs)
             return mapper.collection(collection, resource,
                                      **mapper_kwargs)
 
