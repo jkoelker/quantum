@@ -52,6 +52,3 @@ Man Pages
 .. toctree::
 
     man/quantum-server
-
-apidoc
-=======
