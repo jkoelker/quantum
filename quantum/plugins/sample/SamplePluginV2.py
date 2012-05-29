@@ -137,8 +137,7 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
     """
 
     def __init__(self):
-        #sql_connection = 'sqlite:///:memory:'
-        sql_connection = 'sqlite:///tmp/hozer.db'
+        sql_connection = 'sqlite:///:memory:'
         db.configure_db({'sql_connection': sql_connection,
                          'base': models_v2.model_base.BASEV2})
 
