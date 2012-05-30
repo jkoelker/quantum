@@ -15,9 +15,9 @@ from quantum.wsgi import Serializer, JSONDeserializer
 LOG = logging.getLogger(__name__)
 
 
-class APIv2TestCase(unittest.TestCase):
+class QuantumDbPluginV2TestCase(unittest.TestCase):
     def setUp(self):
-        super(APIv2TestCase, self).setUp()
+        super(QuantumDbPluginV2TestCase, self).setUp()
 
         # NOTE(jkoelker) for a 'pluggable' framework, Quantum sure
         #                doesn't like when the plugin changes ;)
@@ -35,7 +35,7 @@ class APIv2TestCase(unittest.TestCase):
         self.api = APIRouter({'plugin_provider': plugin})
 
     def tearDown(self):
-        super(APIv2TestCase, self).tearDown()
+        super(QuantumDbPluginV2TestCase, self).tearDown()
         # NOTE(jkoelker) for a 'pluggable' framework, Quantum sure
         #                doesn't like when the plugin changes ;)
         db._ENGINE = None
@@ -121,7 +121,7 @@ class APIv2TestCase(unittest.TestCase):
             self._delete('subnets', subnet['subnet']['id'])
 
 
-class TestV2HTTPResponse(APIv2TestCase):
+class TestV2HTTPResponse(QuantumDbPluginV2TestCase):
     def test_create_returns_201(self):
         res = self._create_network('json', 'net2', True)
         self.assertEquals(res.status_int, 201)
@@ -157,8 +157,7 @@ class TestV2HTTPResponse(APIv2TestCase):
         res = req.get_response(self.api)
         self.assertEquals(res.status_int, 404)
 
-# TODO(cerberus): uncomment once we figure out a way to control the
-#                 IP Allocations
+
 #class TestPortsV2(APIv2TestCase):
 #    def setUp(self):
 #        super(TestPortsV2, self).setUp()
@@ -229,7 +228,7 @@ class TestV2HTTPResponse(APIv2TestCase):
 #        self.assertEquals(res.status_int, 404)
 
 
-class TestNetworksV2(APIv2TestCase):
+class TestNetworksV2(QuantumDbPluginV2TestCase):
     # NOTE(cerberus): successful network update and delete are
     #                 effectively tested above
     def test_create_network(self):
@@ -267,7 +266,7 @@ class TestNetworksV2(APIv2TestCase):
             self.assertEquals(res.status_int, 422)
 
 
-class TestSubnetsV2(APIv2TestCase):
+class TestSubnetsV2(QuantumDbPluginV2TestCase):
     def test_create_subnet(self):
         gateway = '10.0.0.1'
         prefix = '10.0.0.0/24'
