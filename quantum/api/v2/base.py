@@ -51,10 +51,15 @@ def filters(request):
 
     {'check': [u'a', u'b'], 'name': [u'Bob']}
     """
-    return dict(((k, request.GET.getall(k))
-                 for k in set(request.GET)
-                 if k not in ('verbose', 'show') and
-                    (v for v in request.GET.getall(k) if v)))
+    res = {}
+    for key in set(request.GET):
+        if key in ('verbose', 'show'):
+            continue
+
+        values = [v for v in request.GET.getall(key) if v]
+        if values:
+            res[key] = values
+    return res
 
 
 def verbose(request):

@@ -12,20 +12,13 @@
 #  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #  License for the spec
 
-#import json
 import logging
 import unittest
-#import contextlib
-#from webob import exc
-#import netaddr
 
 import mock
 import webtest
 
 from quantum.api.v2 import router
-#from quantum.tests.unit.testlib_api import create_request
-#from quantum.wsgi import Serializer, XMLDeserializer, JSONDeserializer
-#from quantum.wsgi import Serializer, JSONDeserializer
 
 
 LOG = logging.getLogger(__name__)
@@ -206,6 +199,108 @@ class APIv2TestCase(unittest.TestCase):
                                                       filters=mock.ANY,
                                                       show=[],
                                                       verbose=mock.ANY)
+
+    def test_filters(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'foo': 'bar'})
+        filters = {'foo': ['bar']}
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=filters,
+                                                      show=mock.ANY,
+                                                      verbose=mock.ANY)
+
+    def test_filters_empty(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'foo': ''})
+        filters = {}
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=filters,
+                                                      show=mock.ANY,
+                                                      verbose=mock.ANY)
+
+    def test_filters_multiple_empty(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'foo': ['', '']})
+        filters = {}
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=filters,
+                                                      show=mock.ANY,
+                                                      verbose=mock.ANY)
+
+    def test_filters_multiple_with_empty(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'foo': ['bar', '']})
+        filters = {'foo': ['bar']}
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=filters,
+                                                      show=mock.ANY,
+                                                      verbose=mock.ANY)
+
+    def test_filters_multiple_values(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'foo': ['bar', 'bar2']})
+        filters = {'foo': ['bar', 'bar2']}
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=filters,
+                                                      show=mock.ANY,
+                                                      verbose=mock.ANY)
+
+    def test_filters_multiple(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'foo': 'bar',
+                                             'foo2': 'bar2'})
+        filters = {'foo': ['bar'], 'foo2': ['bar2']}
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=filters,
+                                                      show=mock.ANY,
+                                                      verbose=mock.ANY)
+
+    def test_filters_with_show(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'foo': 'bar', 'show': 'foo'})
+        filters = {'foo': ['bar']}
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=filters,
+                                                      show=['foo'],
+                                                      verbose=mock.ANY)
+
+    def test_filters_with_verbose(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'foo': 'bar', 'verbose': 1})
+        filters = {'foo': ['bar']}
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=filters,
+                                                      show=mock.ANY,
+                                                      verbose=True)
+
+    def test_filters_with_show_and_verbose(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'foo': 'bar',
+                                             'show': 'foo',
+                                             'verbose': 1})
+        filters = {'foo': ['bar']}
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=filters,
+                                                      show=['foo'],
+                                                      verbose=True)
 
 
 class JSONNetworkV2TestCase(APIv2TestCase):
