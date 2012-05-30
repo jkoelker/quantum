@@ -22,7 +22,7 @@ def tagger(data):
 
 
 def filter_keys(data, keys):
-    """Strips the specified keys from the dictionary 'data'"""
+    """Strips any key not specified in keys from the dictionary 'data'"""
     return dict((item for item in data.iteritems() if item[0] in keys))
 
 
