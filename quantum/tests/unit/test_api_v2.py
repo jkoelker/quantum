@@ -66,15 +66,219 @@ class APIv2TestCase(unittest.TestCase):
         self.api = None
         self.plugin = None
 
-    def _req(self, method, resource, data=None, fmt=None,
-             content_type=None, id=None):
-        pass
-
-    def test_create_network_fmt_json(self):
-        data = {'network': {'name': 'beavis', 'admin_state_up': True}}
+    def test_verbose_attr(self):
         instance = self.plugin.return_value
-        instance.create_network.return_value = data['network']
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'verbose': 'foo'})
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=mock.ANY,
+                                                      show=mock.ANY,
+                                                      verbose=['foo'])
+
+    def test_multiple_verbose_attr(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'verbose': ['foo', 'bar']})
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=mock.ANY,
+                                                      show=mock.ANY,
+                                                      verbose=['foo',
+                                                               'bar'])
+
+    def test_verbose_true_int(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'verbose': 1})
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=mock.ANY,
+                                                      show=mock.ANY,
+                                                      verbose=True)
+
+    def test_verbose_false_int(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'verbose': 0})
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=mock.ANY,
+                                                      show=mock.ANY,
+                                                      verbose=False)
+
+    def test_verbose_false_str(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'verbose': 'false'})
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=mock.ANY,
+                                                      show=mock.ANY,
+                                                      verbose=False)
+
+    def test_verbose_true_str(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'verbose': 'true'})
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=mock.ANY,
+                                                      show=mock.ANY,
+                                                      verbose=True)
+
+    def test_verbose_true_trump_attr(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'verbose': ['true', 'foo']})
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=mock.ANY,
+                                                      show=mock.ANY,
+                                                      verbose=True)
+
+    def test_verbose_false_trump_attr(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'verbose': ['false', 'foo']})
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=mock.ANY,
+                                                      show=mock.ANY,
+                                                      verbose=False)
+
+    def test_verbose_true_trump_false(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'verbose': ['true', 'false']})
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=mock.ANY,
+                                                      show=mock.ANY,
+                                                      verbose=True)
+
+    def test_show(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'show': 'foo'})
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=mock.ANY,
+                                                      show=['foo'],
+                                                      verbose=mock.ANY)
+
+    def test_show_multiple(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'show': ['foo', 'bar']})
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=mock.ANY,
+                                                      show=['foo', 'bar'],
+                                                      verbose=mock.ANY)
+
+    def test_show_multiple_with_empty(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'show': ['foo', '']})
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=mock.ANY,
+                                                      show=['foo'],
+                                                      verbose=mock.ANY)
+
+    def test_show_empty(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'show': ''})
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=mock.ANY,
+                                                      show=[],
+                                                      verbose=mock.ANY)
+
+    def test_show_multiple_empty(self):
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = []
+
+        self.api.get(_get_path('networks'), {'show': ['', '']})
+        instance.get_networks.assert_called_once_with(mock.ANY,
+                                                      filters=mock.ANY,
+                                                      show=[],
+                                                      verbose=mock.ANY)
+
+
+class JSONNetworkV2TestCase(APIv2TestCase):
+    def test_list_networks(self):
+        return_value = [{'network': {'name': 'net1',
+                                     'admin_state_up': True,
+                                     'subnets': [],
+                                     'tags': []}}]
+        instance = self.plugin.return_value
+        instance.get_networks.return_value = return_value
+
+        res = self.api.get(_get_path('networks'))
+        self.assertTrue('networks' in res.json)
+
+    def test_create_network(self):
+        data = {'network': {'name': 'net1', 'admin_state_up': True}}
+        return_value = {'subnets': [], 'tags': []}
+        return_value.update(data['network'].copy())
+
+        instance = self.plugin.return_value
+        instance.create_network.return_value = return_value
+
         res = self.api.post_json(_get_path('networks'), data)
-        LOG.debug(res.status)
-        LOG.debug(res.json)
-        raise Exception
+        self.assertEqual(res.status_int, 201)
+
+    def test_create_network_no_body(self):
+        data = {'whoa': None}
+        res = self.api.post_json(_get_path('networks'), data,
+                                 expect_errors=True)
+        self.assertEqual(res.status_int, 400)
+
+    def test_create_network_no_resource(self):
+        res = self.api.post_json(_get_path('networks'), dict(),
+                                 expect_errors=True)
+        self.assertEqual(res.status_int, 400)
+
+    def test_create_network_missing_attr(self):
+        data = {'network': {'what': 'who'}}
+        res = self.api.post_json(_get_path('networks'), data,
+                                 expect_errors=True)
+        self.assertEqual(res.status_int, 422)
+
+    def test_create_network_bulk(self):
+        data = {'networks': [{'name': 'net1', 'admin_state_up': True},
+                             {'name': 'net2', 'admin_state_up': True}]}
+
+        def side_effect(context, network):
+            nets = network.copy()
+            for net in nets['networks']:
+                net.update({'subnets': [], 'tags': []})
+            return nets
+
+        instance = self.plugin.return_value
+        instance.create_network.side_effect = side_effect
+
+        res = self.api.post_json(_get_path('networks'), data)
+        self.assertEqual(res.status_int, 201)
+
+    def test_create_network_bulk_no_networks(self):
+        data = {'networks': []}
+        res = self.api.post_json(_get_path('networks'), data,
+                                 expect_errors=True)
+        self.assertEqual(res.status_int, 400)
+
+    def test_create_network_bulk_missing_attr(self):
+        data = {'networks': [{'what': 'who'}]}
+        res = self.api.post_json(_get_path('networks'), data,
+                                 expect_errors=True)
+        self.assertEqual(res.status_int, 422)
+
+    def test_create_network_bulk_partial_body(self):
+        data = {'networks': [{'name': 'net1', 'admin_state_up': True},
+                             {}]}
+        res = self.api.post_json(_get_path('networks'), data,
+                                 expect_errors=True)
+        self.assertEqual(res.status_int, 422)
