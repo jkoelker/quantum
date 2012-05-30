@@ -194,6 +194,10 @@ class Controller(object):
                          if self._resource not in b
                          else self._prepare_request_body(b)
                          for b in body[self._collection]]
+
+            if not bulk_body:
+                raise webob.exc.HTTPBadRequest(_("Resources required"))
+
             return {self._collection: bulk_body}
 
         elif self._collection in body and not allow_bulk:
