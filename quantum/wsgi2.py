@@ -60,7 +60,7 @@ def Resource(controller, faults=None, deserializers=None, serializers=None):
                            'application/json': lambda x: json.dumps(x)}
     format_types = {'xml': 'application/xml',
                     'json': 'application/json'}
-    action_status = dict(create=201, update=202, delete=204)
+    action_status = dict(create=201, delete=204)
     default_faults = {}
 
     default_deserializers.update(deserializers or {})
@@ -118,8 +118,13 @@ def Resource(controller, faults=None, deserializers=None, serializers=None):
             kwargs = {'body': body, 'content_type': content_type}
             raise webob.exc.HTTPInternalServerError(**kwargs)
 
-        return webob.Response(request=request,
-                              status=action_status.get(action, 200),
-                              content_type=content_type,
-                              body=serializer(result))
+        status = action_status.get(action, 200)
+        res_kwargs = dict(request=request, status=status)
+
+        # NOTE(jkoelker) Comply with RFC2616 section 9.7
+        if status != 204:
+            res_kwargs['content_type'] = content_type
+            res_kwargs['body'] = serializer(result)
+
+        return webob.Response(**res_kwargs)
     return resource
