@@ -23,7 +23,7 @@ def tagger(data):
 
 def filter_keys(data, keys):
     """Strips any key not specified in keys from the dictionary 'data'"""
-    return dict((item for item in data.iteritems() if item[0] in keys))
+    return dict(item for item in data.iteritems() if item[0] in keys)
 
 
 def resource(data, keys):
