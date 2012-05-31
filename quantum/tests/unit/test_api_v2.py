@@ -12,13 +12,16 @@
 #  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #  License for the spec
 
+import itertools
 import logging
 import unittest
+import uuid
 
 import mock
 import webtest
 
 from quantum.api.v2 import router
+from quantum.api.v2 import views
 
 
 LOG = logging.getLogger(__name__)
@@ -36,14 +39,37 @@ def _get_path(resource, id=None, fmt=None):
     return path
 
 
+class ResourceIndexTestCase(unittest.TestCase):
+    def test_index_json(self):
+        index = webtest.TestApp(router.Index({'foo': 'bar'}))
+        res = index.get('')
+
+        self.assertTrue('resources' in res.json)
+        self.assertTrue(len(res.json['resources']) == 1)
+
+        resource = res.json['resources'][0]
+        self.assertTrue('collection' in resource)
+        self.assertTrue(resource['collection'] == 'bar')
+
+        self.assertTrue('name' in resource)
+        self.assertTrue(resource['name'] == 'foo')
+
+        self.assertTrue('links' in resource)
+        self.assertTrue(len(resource['links']) == 1)
+
+        link = resource['links'][0]
+        self.assertTrue('href' in link)
+        self.assertTrue(link['href'] == 'http://localhost/bar')
+        self.assertTrue('rel' in link)
+        self.assertTrue(link['rel'] == 'self')
+
+
 class APIv2TestCase(unittest.TestCase):
     # NOTE(jkoelker) This potentially leaks the mock object if the setUp
     #                raises without being caught. Using unittest2
     #                or dropping 2.6 support so we can use addCleanup
     #                will get around this.
     def setUp(self):
-        # NOTE(jkoelker) No need to call super() since
-        #                unittest.TestCase.setUp is just a `pass` statement
         plugin = 'quantum.quantum_plugin_base_v2.QuantumPluginBaseV2'
         self._plugin_patcher = mock.patch(plugin, autospec=True)
         self.plugin = self._plugin_patcher.start()
@@ -52,9 +78,6 @@ class APIv2TestCase(unittest.TestCase):
         self.api = webtest.TestApp(api)
 
     def tearDown(self):
-        # NOTE(jkoelker) No need to call super() since
-        #                unittest.TestCase.tearDown is just a `pass`
-        #                statement
         self._plugin_patcher.stop()
         self.api = None
         self.plugin = None
@@ -303,7 +326,7 @@ class APIv2TestCase(unittest.TestCase):
                                                       verbose=True)
 
 
-class JSONNetworkV2TestCase(APIv2TestCase):
+class JSONV2TestCase(APIv2TestCase):
     def test_list_networks(self):
         return_value = [{'network': {'name': 'net1',
                                      'admin_state_up': True,
@@ -377,3 +400,82 @@ class JSONNetworkV2TestCase(APIv2TestCase):
         res = self.api.post_json(_get_path('networks'), data,
                                  expect_errors=True)
         self.assertEqual(res.status_int, 422)
+
+    def test_show_network(self):
+        return_value = {'name': 'net1', 'admin_state_up': True,
+                        'subnets': [], 'tags': []}
+
+        instance = self.plugin.return_value
+        instance.get_network.return_value = return_value
+
+        self.api.get(_get_path('networks', id=str(uuid.uuid4())))
+
+    def test_delete_network(self):
+        instance = self.plugin.return_value
+        instance.delete_network.return_value = None
+
+        res = self.api.delete(_get_path('networks', id=str(uuid.uuid4())))
+        self.assertEqual(res.status_int, 204)
+
+    def test_update_network(self):
+        data = {'network': {'name': 'net1', 'admin_state_up': True}}
+        return_value = {'subnets': [], 'tags': []}
+        return_value.update(data['network'].copy())
+
+        instance = self.plugin.return_value
+        instance.update_network.return_value = return_value
+
+        self.api.put_json(_get_path('networks',
+                                    id=str(uuid.uuid4())), data)
+
+    def test_update_network_bulk_not_allowed(self):
+        data = {'networks': []}
+        res = self.api.put_json(_get_path('networks', id=str(uuid.uuid4())),
+                                data, expect_errors=True)
+        self.assertEqual(res.status_int, 400)
+
+
+class V2Views(unittest.TestCase):
+    def _view(self, keys, func):
+        data = dict(itertools.izip_longest(keys, (), fillvalue='value'))
+        data['fake'] = 'value'
+        res = func(data)
+        self.assertTrue('fake' not in res)
+        for key in keys:
+            self.assertTrue(key in res)
+
+    def test_tagger(self):
+        res = views.tagger(dict())
+        self.assertFalse(res)
+
+    def test_tagger_tags(self):
+        res = views.tagger(dict(tags=[42]))
+        self.assertTrue(res)
+        self.assertTrue(42 in res)
+
+    def test_filter_keys(self):
+        res = views.filter_keys({'one': 1, 'two': 2}, ['one'])
+        self.assertTrue('one' in res)
+        self.assertTrue('two' not in res)
+
+    def test_resource(self):
+        res = views.resource({'one': 1, 'two': 2}, ['one'])
+        self.assertTrue('one' in res)
+        self.assertTrue('two' not in res)
+        self.assertTrue('tags' in res)
+        self.assertFalse(res['tags'])
+
+    def test_network(self):
+        keys = ('id', 'name', 'subnets', 'admin_state_up', 'op_status',
+                'tenant_id', 'mac_ranges')
+        self._view(keys, views.network)
+
+    def test_port(self):
+        keys = ('id', 'network_id', 'mac_address', 'fixed_ips',
+                'device_id', 'admin_state_up', 'tenant_id', 'op_status')
+        self._view(keys, views.port)
+
+    def test_subnet(self):
+        keys = ('id', 'network_id', 'tenant_id', 'gateway_ip',
+                'ip_version', 'prefix')
+        self._view(keys, views.subnet)
