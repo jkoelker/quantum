@@ -144,13 +144,13 @@ class TestV2HTTPResponse(QuantumDbPluginV2TestCase):
         res = req.get_response(self.api)
         self.assertEquals(res.status_int, 204)
 
-    def test_update_returns_202(self):
+    def test_update_returns_200(self):
         with self.network() as net:
             req = self.new_update_request('networks',
                                           {'network': {'name': 'steve'}},
                                           net['network']['id'])
             res = req.get_response(self.api)
-            self.assertEquals(res.status_int, 202)
+            self.assertEquals(res.status_int, 200)
 
     def test_bad_route_404(self):
         req = self.new_list_request('doohickeys')
