@@ -20,8 +20,12 @@ import uuid
 import mock
 import webtest
 
+from webob import exc
+
+from quantum.common import exceptions as q_exc
 from quantum.api.v2 import router
 from quantum.api.v2 import views
+from quantum import wsgi2
 
 
 LOG = logging.getLogger(__name__)
@@ -37,6 +41,50 @@ def _get_path(resource, id=None, fmt=None):
         path = path + '.%s' % fmt
 
     return path
+
+
+class V2WsgiResourceTestCase(unittest.TestCase):
+    def test_unmapped_quantum_error(self):
+        controller = mock.MagicMock()
+        controller.test.side_effect = q_exc.QuantumException()
+
+        resource = webtest.TestApp(wsgi2.Resource(controller))
+
+        environ = {'wsgiorg.routing_args': (None, {'action': 'test'})}
+        res = resource.get('', extra_environ=environ, expect_errors=True)
+        self.assertEqual(res.status_int,  exc.HTTPInternalServerError.code)
+
+    def test_mapped_quantum_error(self):
+        controller = mock.MagicMock()
+        controller.test.side_effect = q_exc.QuantumException()
+
+        faults = {q_exc.QuantumException: exc.HTTPGatewayTimeout}
+        resource = webtest.TestApp(wsgi2.Resource(controller,
+                                                  faults=faults))
+
+        environ = {'wsgiorg.routing_args': (None, {'action': 'test'})}
+        res = resource.get('', extra_environ=environ, expect_errors=True)
+        self.assertEqual(res.status_int, exc.HTTPGatewayTimeout.code)
+
+    def test_http_error(self):
+        controller = mock.MagicMock()
+        controller.test.side_effect = exc.HTTPGatewayTimeout()
+
+        resource = webtest.TestApp(wsgi2.Resource(controller))
+
+        environ = {'wsgiorg.routing_args': (None, {'action': 'test'})}
+        res = resource.get('', extra_environ=environ, expect_errors=True)
+        self.assertEqual(res.status_int, exc.HTTPGatewayTimeout.code)
+
+    def test_unhandled_error(self):
+        controller = mock.MagicMock()
+        controller.test.side_effect = Exception()
+
+        resource = webtest.TestApp(wsgi2.Resource(controller))
+
+        environ = {'wsgiorg.routing_args': (None, {'action': 'test'})}
+        res = resource.get('', extra_environ=environ, expect_errors=True)
+        self.assertEqual(res.status_int, exc.HTTPInternalServerError.code)
 
 
 class ResourceIndexTestCase(unittest.TestCase):
@@ -347,18 +395,18 @@ class JSONV2TestCase(APIv2TestCase):
         instance.create_network.return_value = return_value
 
         res = self.api.post_json(_get_path('networks'), data)
-        self.assertEqual(res.status_int, 201)
+        self.assertEqual(res.status_int, exc.HTTPCreated.code)
 
     def test_create_network_no_body(self):
         data = {'whoa': None}
         res = self.api.post_json(_get_path('networks'), data,
                                  expect_errors=True)
-        self.assertEqual(res.status_int, 400)
+        self.assertEqual(res.status_int, exc.HTTPBadRequest.code)
 
     def test_create_network_no_resource(self):
         res = self.api.post_json(_get_path('networks'), dict(),
                                  expect_errors=True)
-        self.assertEqual(res.status_int, 400)
+        self.assertEqual(res.status_int, exc.HTTPBadRequest.code)
 
     def test_create_network_missing_attr(self):
         data = {'network': {'what': 'who'}}
@@ -380,13 +428,13 @@ class JSONV2TestCase(APIv2TestCase):
         instance.create_network.side_effect = side_effect
 
         res = self.api.post_json(_get_path('networks'), data)
-        self.assertEqual(res.status_int, 201)
+        self.assertEqual(res.status_int, exc.HTTPCreated.code)
 
     def test_create_network_bulk_no_networks(self):
         data = {'networks': []}
         res = self.api.post_json(_get_path('networks'), data,
                                  expect_errors=True)
-        self.assertEqual(res.status_int, 400)
+        self.assertEqual(res.status_int, exc.HTTPBadRequest.code)
 
     def test_create_network_bulk_missing_attr(self):
         data = {'networks': [{'what': 'who'}]}
@@ -415,7 +463,7 @@ class JSONV2TestCase(APIv2TestCase):
         instance.delete_network.return_value = None
 
         res = self.api.delete(_get_path('networks', id=str(uuid.uuid4())))
-        self.assertEqual(res.status_int, 204)
+        self.assertEqual(res.status_int, exc.HTTPNoContent.code)
 
     def test_update_network(self):
         data = {'network': {'name': 'net1', 'admin_state_up': True}}
@@ -432,7 +480,7 @@ class JSONV2TestCase(APIv2TestCase):
         data = {'networks': []}
         res = self.api.put_json(_get_path('networks', id=str(uuid.uuid4())),
                                 data, expect_errors=True)
-        self.assertEqual(res.status_int, 400)
+        self.assertEqual(res.status_int, exc.HTTPBadRequest.code)
 
 
 class V2Views(unittest.TestCase):
