@@ -101,11 +101,11 @@ def Resource(controller, faults=None, deserializers=None, serializers=None):
             LOG.exception('%s failed' % action)
             e_type = type(e)
             body = serializer({'QuantumError': str(e)})
+            kwargs = {'body': body, 'content_type': content_type}
             if e_type in faults:
                 fault = faults[e_type]
-                raise fault(body=body, content_type=content_type)
-            e.body = body
-            raise
+                raise fault(**kwargs)
+            raise webob.exc.HTTPInternalServerError(**kwargs)
         except webob.exc.HTTPException as e:
             LOG.exception('%s failed' % action)
             e.body = serializer({'QuantumError': str(e)})
